@@ -6,5 +6,5 @@
   "author": "baiyangmuzz",
   "description": "MiSide 风格歌词动画：打字机逐字浮现，整句说完后整行坠落到地面，停留后淡出。带灰阶立体挤出、重力与触地反弹。",
   "client": "client.mjs",
-  "preview": "preview.png"
+  "preview": "preview.jpg"
 }
