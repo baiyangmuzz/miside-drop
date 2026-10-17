@@ -197,15 +197,22 @@ const mount = (folium, container, ctx) => {
       + 'backface-visibility:hidden;transform-style:preserve-3d;';
     el.style.textShadow = lineBox.style.textShadow;
     el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-    if (delayMs > 0) el.style.opacity = '0';
     fx.appendChild(el);
+
+    // 显隐交接：延迟期粒子隐身、span 继续显示；到点才由粒子接手。
+    // 立即开始（delay <= 0）的粒子必须在这里当场把 span 藏掉 ——
+    // 否则 step() 里「延迟转正」的分支永远进不去（started 一开始就是 true），
+    // span 会一直亮着，同一个字在排版层和粒子层各出现一次。
+    const pending = delayMs > 0;
+    if (pending) el.style.opacity = '0';
+    else sp.style.visibility = 'hidden';
 
     // 整行一起落时横向散开要收着，否则像爆开。
     const spread = mode === 'sentence' ? 0.3 : 1;
     particles.push({
-      el, span: sp, lineIdx,
+      el, span: pending ? sp : null, lineIdx,
       startAt: performance.now() + delayMs,
-      started: delayMs <= 0,
+      started: !pending,
       x, y, h: sp._h,
       vx: (random() - 0.5) * 170 * spread,
       vy: -60 - random() * 80,
@@ -328,7 +335,15 @@ const mount = (folium, container, ctx) => {
 
     // 换行：先把离开的那行落完再重建。spans 一旦被替换，未落下的字就永久丢失。
     if (index !== shownIndex) {
-      if (shownIndex >= 0 && !ctx.staticMode) dropLine(Infinity, 0.014);
+      if (shownIndex >= 0 && !ctx.staticMode) {
+        // 上一句还没落地的粒子强制急坠。
+        // 歌词没有句间间隔（上一句 endTime 就是下一句 startTime），不催的话下一句
+        // 出现时上一句还悬在半空，视觉上就是「同一时间挂着两行文字」。
+        for (const p of particles) {
+          if (!p.settled) p.vy = Math.max(p.vy, 650);
+        }
+        dropLine(Infinity, 0.014);
+      }
       buildLine(index);
     }
 
