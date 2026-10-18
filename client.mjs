@@ -56,21 +56,27 @@ const extrude = (daylight) => {
 };
 
 const mount = (folium, container, ctx) => {
-  const s = ctx.getSettings();
-  const mode = s.dropModeV2 === 'word' ? 'word' : 'sentence';
-  const fontScale = num(s, 'fontSizeV2', 56, 24, 120) / 56 * ctx.getDisplay().lyricsFontScale;
-  const dropDelay = num(s, 'dropDelayV2', 0, -0.5, 3);
-  const leadTime = num(s, 'leadTimeV2', 0, -0.3, 0.3);
-  const gravity = num(s, 'gravityV2', 1400, 100, 6000);
-  const elasticity = num(s, 'elasticityV2', 0.34, 0, 0.85);
-  const settleHold = num(s, 'settleHoldV2', 2.5, 0, 10);
-  const fadeTime = num(s, 'fadeTimeV2', 1.5, 0.1, 8);
-  const groundRatio = num(s, 'groundHeightV2', 0.82, 0.05, 0.99);
-  const keepRows = Math.round(num(s, 'keepRowsV2', 2, 0, 8));
-  const stackFade = bool(s, 'stackFadeV2', true);
-  const glowBoost = bool(s, 'glowBoostV2', true);
-  const typeSpeed = num(s, 'typeSpeedV2', 0, 0, 0.5);
-  const tiltLimit = num(s, 'flipLimitV2', 16, 0, 45);
+  // 设置与显示参数随时可能变（模组设置、宿主歌词字号），ctx.subscribe 回调里重读。
+  const readCfg = () => {
+    const st = ctx.getSettings();
+    return {
+      mode: st.dropModeV2 === 'word' ? 'word' : 'sentence',
+      fontScale: num(st, 'fontSizeV2', 56, 24, 120) / 56 * ctx.getDisplay().lyricsFontScale,
+      dropDelay: num(st, 'dropDelayV2', 0, -0.5, 3),
+      leadTime: num(st, 'leadTimeV2', 0, -0.3, 0.3),
+      gravity: num(st, 'gravityV2', 1400, 100, 6000),
+      elasticity: num(st, 'elasticityV2', 0.34, 0, 0.85),
+      settleHold: num(st, 'settleHoldV2', 2.5, 0, 10),
+      fadeTime: num(st, 'fadeTimeV2', 1.5, 0.1, 8),
+      groundRatio: num(st, 'groundHeightV2', 0.82, 0.05, 0.99),
+      keepRows: Math.round(num(st, 'keepRowsV2', 2, 0, 8)),
+      stackFade: bool(st, 'stackFadeV2', true),
+      glowBoost: bool(st, 'glowBoostV2', true),
+      typeSpeed: num(st, 'typeSpeedV2', 0, 0, 0.5),
+      tiltLimit: num(st, 'flipLimitV2', 16, 0, 45),
+    };
+  };
+  let cfg = readCfg();
 
   // ── DOM ──
   const stage = document.createElement('div');
@@ -85,7 +91,7 @@ const mount = (folium, container, ctx) => {
     + 'line-height:1.35;letter-spacing:0.04em;';
 
   const ground = document.createElement('div');
-  ground.style.cssText = `position:absolute;left:8%;right:8%;height:1px;top:${groundRatio * 100}%;`
+  ground.style.cssText = `position:absolute;left:8%;right:8%;height:1px;top:${cfg.groundRatio * 100}%;`
     + 'pointer-events:none;opacity:0.5;';
 
   fx.appendChild(ground);
@@ -113,15 +119,25 @@ const mount = (folium, container, ctx) => {
 
     lineBox.style.fontFamily = folium.theme.resolveFontStack(theme);
     lineBox.style.fontWeight = String(folium.theme.resolveFontWeight(theme, 700));
-    lineBox.style.fontSize = `${56 * fontScale}px`;
+    lineBox.style.fontSize = `${56 * cfg.fontScale}px`;
     lineBox.style.color = `rgb(${ink})`;
-    lineBox.style.textShadow = glowBoost
+    lineBox.style.textShadow = cfg.glowBoost
       ? `${extrude(daylight)},10px 12px 24px ${daylight ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.88)'}`
       : `0 6px 22px ${daylight ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.85)'}`;
 
     const line = daylight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.28)';
     ground.style.background =
       `linear-gradient(90deg,transparent,${line} 18%,${line} 82%,transparent)`;
+  };
+
+  // 跟随宿主的显示开关：showText 为 false（如设置面板盖住播放器）时不画字，
+  // 与内置动画一致；visualizerOpacity 是用户在设置里调的可视化透明度。
+  // 用 display 而非 visibility：内部 span 各自显式设了 visibility，会覆盖祖先的 hidden。
+  const applyDisplay = () => {
+    const d = ctx.getDisplay();
+    stage.style.display = d.showText === false ? 'none' : 'flex';
+    const op = typeof d.visualizerOpacity === 'number' ? d.visualizerOpacity : 1;
+    stage.style.opacity = String(Math.max(0, Math.min(1, op)));
   };
 
   // offsetLeft/offsetTop 相对 lineBox（它是 position:relative，即 span 的 offsetParent），
@@ -135,7 +151,7 @@ const mount = (folium, container, ctx) => {
     }
     boxX = lineBox.offsetLeft;
     boxY = lineBox.offsetTop;
-    groundY = stage.clientHeight * groundRatio;
+    groundY = stage.clientHeight * cfg.groundRatio;
   };
 
   // 只保留最近 keepRows 个行号的落地粒子。
@@ -145,7 +161,7 @@ const mount = (folium, container, ctx) => {
     for (let i = particles.length - 1; i >= 0; i -= 1) {
       const id = particles[i].lineIdx;
       if (keep.indexOf(id) < 0) {
-        if (keep.length >= keepRows) break;
+        if (keep.length >= cfg.keepRows) break;
         keep.push(id);
       }
     }
@@ -208,7 +224,7 @@ const mount = (folium, container, ctx) => {
     else sp.style.visibility = 'hidden';
 
     // 整行一起落时横向散开要收着，否则像爆开。
-    const spread = mode === 'sentence' ? 0.3 : 1;
+    const spread = cfg.mode === 'sentence' ? 0.3 : 1;
     particles.push({
       el, span: pending ? sp : null, lineIdx,
       startAt: performance.now() + delayMs,
@@ -221,8 +237,8 @@ const mount = (folium, container, ctx) => {
       vrx: (random() - 0.5) * 56 * spread,
       vry: (random() - 0.5) * 56 * spread,
       vrz: (random() - 0.5) * 300 * spread,
-      g: gravity * (0.88 + random() * 0.24),
-      rest: elasticity * (0.85 + random() * 0.25),
+      g: cfg.gravity * (0.88 + random() * 0.24),
+      rest: cfg.elasticity * (0.85 + random() * 0.25),
       settled: false,
       settledAt: 0,
       fade: 1,
@@ -243,14 +259,14 @@ const mount = (folium, container, ctx) => {
     // 必须重测：buildLine 那次是在 span 刚插入时跑的，排版可能还没提交。
     measure();
     due.forEach((i, n) => {
-      if (spawn(spans[i], shownIndex, dropDelay + n * stagger)) spans[i]._dropped = true;
+      if (spawn(spans[i], shownIndex, cfg.dropDelay + n * stagger)) spans[i]._dropped = true;
     });
   };
 
   const boundTilt = (p, key, velKey, dt) => {
     p[key] += p[velKey] * dt;
-    if (p[key] > tiltLimit) { p[key] = tiltLimit; p[velKey] = -Math.abs(p[velKey]); }
-    else if (p[key] < -tiltLimit) { p[key] = -tiltLimit; p[velKey] = Math.abs(p[velKey]); }
+    if (p[key] > cfg.tiltLimit) { p[key] = cfg.tiltLimit; p[velKey] = -Math.abs(p[velKey]); }
+    else if (p[key] < -cfg.tiltLimit) { p[key] = -cfg.tiltLimit; p[velKey] = Math.abs(p[velKey]); }
   };
 
   const step = (dt, now) => {
@@ -269,10 +285,10 @@ const mount = (folium, container, ctx) => {
       }
 
       if (p.settled) {
-        if (!stackFade) continue;
+        if (!cfg.stackFade) continue;
         const held = (now - p.settledAt) / 1000;
-        if (held <= settleHold) continue;
-        p.fade = 1 - (held - settleHold) / fadeTime;
+        if (held <= cfg.settleHold) continue;
+        p.fade = 1 - (held - cfg.settleHold) / cfg.fadeTime;
         if (p.fade <= 0) {
           p.el.remove();
           particles.splice(i, 1);
@@ -329,7 +345,7 @@ const mount = (folium, container, ctx) => {
     const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 1 / 60;
     lastTs = ts;
 
-    const lyric = ctx.currentTime.get() + leadTime;
+    const lyric = ctx.currentTime.get() + cfg.leadTime;
     const index = ctx.staticMode && ctx.staticLineIndex !== null
       ? ctx.staticLineIndex : ctx.getLineIndex();
 
@@ -358,11 +374,11 @@ const mount = (folium, container, ctx) => {
       for (let i = 0; i < spans.length; i += 1) {
         const sp = spans[i];
         if (sp._dropped) continue;
-        const at = timings[i].start + (mode === 'word' ? i * typeSpeed : 0);
+        const at = timings[i].start + (cfg.mode === 'word' ? i * cfg.typeSpeed : 0);
         sp.style.visibility = lyric >= at ? 'visible' : 'hidden';
       }
       // 逐字模式：唱到就落；整句模式：说完整行落。两条路都幂等。
-      if (mode === 'word') dropLine(lyric, 0);
+      if (cfg.mode === 'word') dropLine(lyric, 0);
       else if (lyric >= line.endTime) dropLine(Infinity, 0.014);
     }
 
@@ -376,6 +392,7 @@ const mount = (folium, container, ctx) => {
 
   // ── 启动 ──
   applyTheme();
+  applyDisplay();
   buildLine(ctx.staticMode && ctx.staticLineIndex !== null ? ctx.staticLineIndex : ctx.getLineIndex());
   rafId = window.requestAnimationFrame(frame);
 
@@ -387,8 +404,13 @@ const mount = (folium, container, ctx) => {
     document.fonts.ready.then(() => { if (!disposed) measure(); }).catch(() => {});
   }
 
+  // 宿主不会因为模组设置或歌词字号变化而重挂载，只在这里通知，所以要重读配置。
+  // 字号变了 lineBox 会重排，spans 的 offsetWidth 随之变化，measure() 一并刷新。
   const offChanges = ctx.subscribe(() => {
+    cfg = readCfg();
     applyTheme();
+    applyDisplay();
+    ground.style.top = `${cfg.groundRatio * 100}%`;
     measure();
   });
   const onResize = () => measure();
@@ -405,6 +427,17 @@ const mount = (folium, container, ctx) => {
 };
 
 export default function activate(folium) {
+  // ctx.getDisplay() 与 ctx.seed 是 Folium 1.3 才有的接口。
+  // 更早的宿主上挂载会直接抛错，所以先挡掉，返回一个空的清理函数。
+  const v = folium.host && folium.host.folium;
+  const supported = !v || v.major > 1 || (v.major === 1 && v.minor >= 3);
+  if (!supported) {
+    if (folium.log && folium.log.warn) {
+      folium.log.warn('miside-drop 需要 Folium 1.3 及以上，当前宿主版本过低，已跳过挂载');
+    }
+    return () => {};
+  }
+
   const handle = folium.registries.visualizers.register({
     id: 'miside-drop',
     label: { 'zh-CN': 'MiSide 掉落', en: 'MiSide Drop' },
