@@ -12,9 +12,11 @@ Folia 的 Folium 歌词动画模组。灵感来自游戏 **MiSide** 的对话字
 
 ## 安装
 
-拖 `miside-drop.zip` 进 Folia 模组面板即可（会显示「官方认证」或「未验证」取决于来源）。
+需要 **Folium 1.3 及以上**（用到了 `ctx.getDisplay()` 与 `ctx.seed`）。
 
-或手动放到：
+从模组市场安装，或拖 `miside-drop.zip` 进 Folia 的模组面板。
+
+手动安装放这里：
 
 ```
 %APPDATA%/Folia/mods/miside-drop/
@@ -43,13 +45,17 @@ Folia 的 Folium 歌词动画模组。灵感来自游戏 **MiSide** 的对话字
 
 ## 实现要点
 
-三个不可违反的约束，改坏任意一个都会出 bug：
+四个不可违反的约束，改坏任意一个都会出 bug：
 
 1. **`stage` 零 padding / 零 border** —— 绝对定位的包含块是 padding box，测量拿的是 border box，有 padding 就整体错位。边距交给 `lineBox` 的 `max-width`。
 2. **粒子坐标是舞台绝对坐标，与 `lineBox` 无关** —— 换行时不能清粒子。
 3. **物理走独立 `requestAnimationFrame` + 真实 `dt` 积分** —— 用歌词时钟驱动会随刷新率变速。
+4. **文字显隐的交接只在 `spawn()` 里决定** —— 延迟落下的字由 `span` 显示、粒子隐形；到点由粒子接手、`span` 藏起。若在别处补一手「隐藏已掉落的字」，无延迟的字会因为 `started` 一开始就是 `true` 而错过隐藏，同一个字在排版层和粒子层各显示一次。
 
 测量用 `span.offsetLeft/offsetTop`（`offsetParent` 是 `position:relative` 的 `lineBox`），不含页面滚动，也不受祖先 `transform` 影响。
+
+设置与显示参数在 `ctx.subscribe` 回调里重读，改设置、改歌词字号当场生效，不必换歌。
+`getDisplay().showText` 为 false 时整层 `display:none`（内部 `span` 各自显式设了 `visibility`，祖先的 `hidden` 会被覆盖）；`visualizerOpacity` 接到容器透明度。
 
 ## 许可
 
